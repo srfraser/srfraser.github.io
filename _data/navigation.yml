@@ -1,0 +1,5 @@
+posts:
+  - title: Getting Started
+    children:
+      - title: "Funsize fun-times"
+        url: /funsize-fun-times/
