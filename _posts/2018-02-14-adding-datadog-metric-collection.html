@@ -1,0 +1,104 @@
+---
+layout: post
+status: publish
+published: true
+title: Adding datadog metric collection
+author:
+  display_name: simon
+  login: simon
+  email: simon@underhenge.org
+  url: ''
+author_login: simon
+author_email: simon@underhenge.org
+wordpress_id: 30
+wordpress_url: https://www.underhenge.org/?p=30
+date: '2018-02-14 17:52:31 +0000'
+date_gmt: '2018-02-14 17:52:31 +0000'
+categories:
+- Uncategorized
+tags: []
+comments: []
+---
+<p>&nbsp;</p>
+<p>The datadogpy<a href="http://datadogpy.readthedocs.io/en/latest/#">&nbsp;documentation</a> is good, but there's some useful local knowledge that will be helpful when adding metric collection to Release Engineering tools, and some good habits to get into when choosing how to set up your script.</p>
+<h3>Quickstart</h3>
+<pre>pip install datadogpy</pre>
+<p>or</p>
+<pre>pipenv install datadogpy</pre>
+<p>Then a basic example:</p>
+<pre>#!/usr/bin/env python3
+
+from datadog import initialize, ThreadStats
+
+ddstats = ThreadStats(namespace='releng.sandbox.blogpost')
+
+dd_options = {
+    'api_key': 'api key goes here',
+}
+        
+initialize(**dd_options)
+ddstats.start(flush_interval=1)
+
+
+metric_tags = [
+    "tag1:value1",
+    "tag2:value2"
+]
+
+with ddstats.timer('sleeptimer', tags=metric_tags):
+    time.sleep(10)
+</pre>
+<p>&nbsp;</p>
+<h3>Explanations</h3>
+<h5>from datadog import initialize, ThreadStats</h5>
+<p>ThreadStats is an option in the datadogpy module that allows the metric collection and API calls to run in a separate thread, ensuring that any error with that aspect won't impact the script's own performance.</p>
+<h5>ddstats = ThreadStats(namespace='releng.sandbox.blogpost')</h5>
+<p>Next, create an object that can be used to send metrics, ensuring it's visible in all the scopes that need it. You might want to make it a global.</p>
+<h5>Namespaces</h5>
+<p>The namespace is important. We share the global metric namespace with everyone else in the same datadog organisation, so we need to make sure that anything we send doesn't conflict with someone else's data.</p>
+<p>Adding a namespace to the ThreadStats() object will prepend this value to the name of any metric we send, making the submission calls shorter to read and type, and allowing us to change the namespace globally for testing.</p>
+<p>Funsize uses 'releng.releases.partials' as a namespace, because release engineering produced this metric, it's about releases, and within releases it's about partial generation. So you might see metrics called 'releng.releases.partials.task_duration'</p>
+<p>For testing, you can change the global namespace to a sandbox one - the name itself isn't special, this is just a convention:</p>
+<p>ddstats = ThreadStats(namespace='releng.sandbox.sfraser')</p>
+<h5>Initialization</h5>
+<p>Once you&nbsp;initialize() with the api key, and call the start method on your stats object, any metric submission calls will send their data to datadog. <strong>If you don't call initialize and start, then the metric submission calls will still work, but no data will be submitted</strong>.</p>
+<p>This is useful for turning off&nbsp;metric collection, for example&nbsp; not having it run on some repositories or with local testing, as you don't need to wrap all the submission calls in conditionals.</p>
+<h5>Getting the API key.</h5>
+<p>The python module does not automatically detect any source of API key, so we must find it ourselves.</p>
+<p>For local testing it can be simplest to provide it as an environment variable:</p>
+<p class="p1"><span class="s1">dd_api_key = os.environ.get(</span><span class="s2">'DATADOG_API_KEY'</span><span class="s1">)</span></p>
+<p>For running in taskcluster, you may want to use the <a href="https://docs.taskcluster.net/manual/using/secrets">Taskcluster Secrets</a> service and pass the location of the secret into the script. The task will need the appropriate scope to read the secret, as will the user or decision task that creates it. Ensure the task has the 'taskclusterproxy' feature enabled, and make a call to the secrets service, such as this <a href="https://dxr.mozilla.org/mozilla-central/rev/e43f2f6ea111c2d059d95fa9a71516b869a69698/taskcluster/docker/funsize-update-generator/scripts/funsize.py#82-92">example</a>.</p>
+<h5>flush_interval</h5>
+<p>This is simply how often you'd like the submission thread to submit its metrics, if it has any.</p>
+<p><strong>If less than flush_interval seconds occurs between your script's last metric submission, and the script ending, then you may lose data.</strong></p>
+<h5>Metric Tags</h5>
+<p>Tagging a metric is very helpful. For example, if we have a tag of 'branch', we can easily submit metrics for 'mozilla-central', 'mozilla-beta', 'maple' and others, and filter out the ones we're not interested in when we view the data. It might be that something we've done on, say, maple makes things a lot slower, and without the tag we won't be able to tell when looking at the graph. It'll just be spikey and we won't be able to say why.</p>
+<p>Don't add too many tags - this increases the cardinality of the metric being collected, making it slower to retrieve, and cause storage problems (not just with datadog, with any time series database)</p>
+<p>Good examples of tags might be:</p>
+<ul>
+<li>branch</li>
+<li>platform</li>
+<li>hostname (for scriptworkers and others where this makes sense, not docker)</li>
+<li>The unit of any collected measurement - bytes, bps, Mbps, gigaparsecs per hour. Essential if we want to compare two metrics and know whether the comparison is meaningful</li>
+<li>script name and version ("There's a spike here when we changed from scriptv1 to scriptv2!")</li>
+</ul>
+<p>See also&nbsp;<a href="http://metrics20.org/">Metrics 2.0</a> for useful guidance.</p>
+<h5>with ddstats.timer('sleeptimer', tags=metric_tags)</h5>
+<p>A straightforward enough example - when entering the context, the time is recorded, and when the context exits the difference in time is submitted. In this example the metric name will be 'releng.sandbox.blogpost.sleeptimer', and it will be tagged with the tags set just above.</p>
+<h3>The 'dog' command line tool</h3>
+<p>Sometimes you may need a shell script to send metrics. If you've installed datadogpy, then there will be a command to send data and make a few other queries. Its basic use will be like this:</p>
+<pre>dog metric post "releng.sandbox.mytest.metric" 1.0
+</pre>
+<p>To add tags:</p>
+<pre>dog metric post "releng.sandbox.mytest.metric" 1.0 --tags "tag1:value1,tag2:value2"
+</pre>
+<p>The current hostname will be automatically added as a tag. If you're running in a docker-worker, or don't care about the hostname of the instance that produced the metric, then you can add the --no_host option to avoid sending the hostname.</p>
+<h4>The .dogrc file</h4>
+<p>To get the command-line tool to work, it needs a configuration file with the API key in. This is <a href="https://docs.python.org/3/library/configparser.html">configparser</a> compatible:</p>
+<pre>[Connection]
+apikey = api_key_goes_here
+appkey =
+</pre>
+<p>(Yes, appkey can be left blank)</p>
+<p>Funsize has an example of <a href="https://dxr.mozilla.org/mozilla-central/rev/e43f2f6ea111c2d059d95fa9a71516b869a69698/taskcluster/docker/funsize-update-generator/scripts/funsize.py#53-62">generating this dogrc</a> file from a surrounding python script.</p>
+<p>&nbsp;</p>

@@ -1,0 +1,103 @@
+---
+layout: post
+status: publish
+published: true
+title: An Asynchronous Task
+author:
+  display_name: simon
+  login: simon
+  email: simon@underhenge.org
+  url: ''
+author_login: simon
+author_email: simon@underhenge.org
+wordpress_id: 37
+wordpress_url: https://www.underhenge.org/?p=37
+date: '2018-02-27 17:51:08 +0000'
+date_gmt: '2018-02-27 17:51:08 +0000'
+categories:
+- Uncategorized
+tags: []
+comments: []
+---
+<p>makes Following on from&nbsp;<a href="https://www.underhenge.org/2018/02/08/funsize-fun-times/">Funsize fun times</a>&nbsp;we're going to make the task run asynchronously. This won't save us CPU time, as the work still needs to be done, but it should save us wall-clock time. We'll be done in fewer minutes, but we'll be doing more work in those minutes.</p>
+<h3>Anatomy of a partials task</h3>
+<p>The <a href="https://hg.mozilla.org/mozilla-central/file/a67a3813e06a/taskcluster/docker/funsize-update-generator/scripts/funsize.py#l273">main loop</a> for work in a funsize task follows the following pseudocode:</p>
+<pre>for every partial we've been told to build
+    Set up a working directory, including downloading tools like 'mar' and 'mbsdiff'
+
+    Download the 'from' MAR
+    Verify its signature
+    Unpack the MAR
+    Virus scan the unpacked contents
+
+    Download the 'to' MAR
+    Verify its signature
+    Unpack the MAR
+    Virus scan the unpacked contents
+
+    Set up some metadata
+    Generate the partial using 'make_incremental_update.sh'
+    Copy the resulting file to the artifacts area
+    Clean up
+</pre>
+<p>Because each task generates multiple partials, we have what's known as an&nbsp;<a href="https://en.wikipedia.org/wiki/Embarrassingly_parallel">embarrassingly&nbsp;parallel</a> task. Each iteration in that for loop could easily run at the same time, as long as they're given a different working environment.</p>
+<h3>Starting out</h3>
+<p>We know we'll be doing web requests, so let's add the 'aiohttp' library to our virtual environment, and get to work.</p>
+<p>Let's keep the set-up in 'main', but move the work out into different functions. This will make things easier to read in any case. Setting up an <a href="https://hg.mozilla.org/mozilla-central/file/a98402f998c4/taskcluster/docker/funsize-update-generator/scripts/funsize.py#l467">event loop</a> in place of the earlier 'for' loop:</p>
+<pre>    loop = asyncio.get_event_loop()
+    manifest = loop.run_until_complete(async_main(args, signing_certs))
+    loop.close()
+</pre>
+<p><code>async_main</code>&nbsp;can now contain the <code>for</code> loop that will iterate over the partials we want to create, but instead of doing them sequentially, we can create them as futures, and then <code>await</code>&nbsp;them all. We can move the bulk of the work into a new `<a href="https://hg.mozilla.org/mozilla-central/file/a98402f998c4/taskcluster/docker/funsize-update-generator/scripts/funsize.py#l265">manage_partials</a>` function.</p>
+<pre>async def async_main(args, signing_certs);
+    tasks = []
+    master_env = WorkEnv()
+    await master_env.setup()
+    for definition in task["extra"]["funsize"]["partials"]:
+        workenv = WorkEnv()
+        await workenv.clone(master_env)
+        tasks.append(asyncio.ensure_future(manage_partial(...all the args...)))
+
+    manifest = await asyncio.gather(*tasks)
+    master_env.cleanup()
+    
+    return manifest
+
+</pre>
+<p>We could have just called return <code>await asyncio.gather(*tasks)</code> if we didn't want to clean up the working environments. Instead, since setting up a work environment involves downloading some tools, we optimise a bit by only doing that once and then cloning it locally for each task.</p>
+<h3>The heavy(ish) lifting</h3>
+<p>Most of the work is done in called processes, so we need to migrate away from using the <code>sh</code>&nbsp;module, even if that's very useful. Perhaps in the future <code>sh</code>&nbsp;can be async-aware.</p>
+<p>Thankfully, the <code>asyncio</code>&nbsp;module has <code>create_subprocess_shell</code>, which works in a similar way, and is easy to use. We can call that with the command we're given and still set up the process's environment and current working directory, and get the output. The results is the <a href="https://hg.mozilla.org/mozilla-central/file/a98402f998c4/taskcluster/docker/funsize-update-generator/scripts/funsize.py#l121"><code>run_command</code></a>function.</p>
+<pre>async def run_command(cmd, cwd='/', env=None, label=None, silent=False):
+    if not env:
+        env = dict()
+    process = await asyncio.create_subprocess_shell(cmd,
+                                                    stdout=asyncio.subprocess.PIPE,
+                                                    stderr=asyncio.subprocess.STDOUT,
+                                                    cwd=cwd, env=env)
+    stdout, stderr = await process.communicate()
+
+    await process.wait()
+
+    if silent:
+        return
+
+    if not stderr:
+        stderr = ""
+    if not stdout:
+        stdout = ""
+
+    if label:
+        label = "{}: ".format(label)
+    else:
+        label = ''
+
+    for line in stdout.splitlines():
+        log.debug("%s%s", label, line.decode('utf-8'))
+    for line in stderr.splitlines():
+        log.warn("%s%s", label, line.decode('utf-8'))
+</pre>
+<p>We do the same for download functions, and things Just Work.</p>
+<h3>Task Durations</h3>
+<p>We've done well with the overall task time, using the same amount of cpu in a shorter space of time. We still have more optimisation to do within the partials generation itself, though.</p>
+<p><img class="alignnone  wp-image-38" src="https://pages.underhenge.org/images/partials_async-300x140.png" alt="" width="701" height="327" /></p>
