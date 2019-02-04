@@ -19,7 +19,7 @@ categories:
 tags: []
 comments: []
 ---
-<p>makes Following on from&nbsp;<a href="https://www.underhenge.org/2018/02/08/funsize-fun-times/">Funsize fun times</a>&nbsp;we're going to make the task run asynchronously. This won't save us CPU time, as the work still needs to be done, but it should save us wall-clock time. We'll be done in fewer minutes, but we'll be doing more work in those minutes.</p>
+<p>Following on from&nbsp;<a href="https://www.underhenge.org/2018/02/08/funsize-fun-times/">Funsize fun times</a>&nbsp;we're going to make the task run asynchronously. This won't save us CPU time, as the work still needs to be done, but it should save us wall-clock time. We'll be done in fewer minutes, but we'll be doing more work in those minutes.</p>
 <h3>Anatomy of a partials task</h3>
 <p>The <a href="https://hg.mozilla.org/mozilla-central/file/a67a3813e06a/taskcluster/docker/funsize-update-generator/scripts/funsize.py#l273">main loop</a> for work in a funsize task follows the following pseudocode:</p>
 <pre>for every partial we've been told to build
@@ -100,4 +100,4 @@ comments: []
 <p>We do the same for download functions, and things Just Work.</p>
 <h3>Task Durations</h3>
 <p>We've done well with the overall task time, using the same amount of cpu in a shorter space of time. We still have more optimisation to do within the partials generation itself, though.</p>
-<p><img class="alignnone  wp-image-38" src="https://pages.underhenge.org/images/partials_async-300x140.png" alt="" width="701" height="327" /></p>
+<p><img class="alignnone  wp-image-38" src="https://www.underhenge.org/images/partials_async-300x140.png" alt="" width="701" height="327" /></p>

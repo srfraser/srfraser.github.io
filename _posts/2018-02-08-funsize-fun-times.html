@@ -120,13 +120,13 @@ ddstats.gauge('partial_mar_size', mar_data['size'], tags=metric_tags)
 <h3>What do we find out from this data?</h3>
 <h4>Virus Scans</h4>
 <p>Our virus scanning times look stable. The graph is a bit choppy because we run the nightly releases once a day, so there's not a continuous stream of data coming in.</p>
-<p><img class="alignnone wp-image-16" src="https://pages.underhenge.org/images/virusscanning-300x117.png" alt="" width="428" height="167" /></p>
+<p><img class="alignnone wp-image-16" src="https://www.underhenge.org/images/virusscanning-300x117.png" alt="" width="428" height="167" /></p>
 <h4>Download Times</h4>
 <p>The graph of download times is a good example of what happens when you don't add useful tags to your metrics. Here we would benefit from knowing which platforms we were downloading files for, as that would likely explain the uneven nature of the data. However, the times are mostly short. We could save some time in the future by downloading files in parallel, but only a small amount.</p>
-<p><img class="alignnone wp-image-17" src="https://pages.underhenge.org/images/downloadtimes-300x116.png" alt="" width="429" height="166" /></p>
+<p><img class="alignnone wp-image-17" src="https://www.underhenge.org/images/downloadtimes-300x116.png" alt="" width="429" height="166" /></p>
 <h4>Partials generation</h4>
 <p>As expected, generating the partial files themselves takes the majority of the time. This time, the metric tags show us something useful: There's a marked difference in timing between the platforms with MacOSX (yellow) taking longer than Linux (purple 32bit and 64bit), which in turn is longer than Windows (Blue 32bit and 64bit).</p>
-<p><img class="alignnone wp-image-18" src="https://pages.underhenge.org/images/partialgenerationtime_before-300x117.png" alt="" width="433" height="169" /></p>
+<p><img class="alignnone wp-image-18" src="https://www.underhenge.org/images/partialgenerationtime_before-300x117.png" alt="" width="433" height="169" /></p>
 <h3>What a diff-erence a patch makes</h3>
 <p>The heavy lifting in making a partial update is done by mbsdiff. This is a locally modified version of the binary diff&nbsp;<a href="http://www.daemonology.net/bsdiff/">bsdiff</a> algorithm by&nbsp;Colin Percival.&nbsp; We could have guessed this was the part taking most of the time, but it's good to have confirmation because the world - and code - is full of surprises.</p>
 <p>Reworking mbsdiff seems like a lot of effort, and we're lazy, so what else can we do?</p>
@@ -171,9 +171,9 @@ fi
 </pre>
 <p>Before each call to mbsdiff, we get a SHA hash of the two files we're about to diff, and check to see if there is an object in S3 keyed on those hashes and the filename. If there is, we can download it and use that instead. If it's not there, we store it in S3 after computing the diff. This means that the en-US partials build takes longer, but saves the other locales work.</p>
 <p>Network I/O is not free, and neither is computing the SHA hash, so there's a possibility for more optimisation by only doing this on files above a certain size. For the smallest files, we've traded CPU time for network latency. Have we saved time overall?</p>
-<p><img class="alignnone wp-image-20" src="https://pages.underhenge.org/images/partialsgeneration_aftercache-300x41.png" alt="" width="710" height="97" /></p>
+<p><img class="alignnone wp-image-20" src="https://www.underhenge.org/images/partialsgeneration_aftercache-300x41.png" alt="" width="710" height="97" /></p>
 <p>It doesn't look easy to see. Let's have a look at the full task durations, to see if that's clearer. Since we don't have historical data for this in Datadog, we import the data into <a href="https://plot.ly/">plot.ly</a> and produce a graph there.</p>
-<p><img class="alignnone wp-image-22" src="https://pages.underhenge.org/images/partials_task_duration_after_caching-300x170.png" alt="" width="685" height="388" /></p>
+<p><img class="alignnone wp-image-22" src="https://www.underhenge.org/images/partials_task_duration_after_caching-300x170.png" alt="" width="685" height="388" /></p>
 <p>This is much clearer, even though it's an aggregate value over four partials generations. The end of the graph shows a marked drop in task duration. We expect spikes, because en-US still takes the original length of time - in fact, a bit longer because now it has to upload patches. It looks like MacOSX takes even longer now. Are there cache misses? We need to add more metrics collection to find out. It looks like we have saved a lot of effort for the other platforms.</p>
 <p>Adding to the table from earlier, we can compare the average task times</p>
 <table style="border-spacing: 0px; border: 1px solid;">
