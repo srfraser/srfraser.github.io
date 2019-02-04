@@ -1,6 +1,2 @@
 
-Foo
-===
-
-This is *some* test _text_ I wonder what will happen
-
+The occasional blog of a Release Engineer at Mozilla.
