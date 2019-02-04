@@ -29,6 +29,13 @@
       </header>
 
       <section>
+          <ul>
+              {% for post in site.posts %}
+                  <li>
+                      <a ref="{{ post.url }}">{{ post.title }}</a>
+                  </li>
+              {% endfor %}
+          </ul>
         {{ content }}
       </section>
 
